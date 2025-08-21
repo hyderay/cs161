@@ -1,0 +1,54 @@
+# macOS system files
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon?
+._*
+
+# Thumbnails
+*.icloud
+*.Spotlight-V100
+*.Trashes
+
+# Go build artifacts
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+
+# Go coverage
+*.cover
+*.coverprofile
+*.cov
+*.gcov
+*.lcov
+
+# Go workspace files
+go.work
+go.work.sum
+
+# Dependency directories
+vendor/
+
+# Logs
+*.log
+
+# Binaries
+bin/
+build/
+
+# Editor/IDE configs
+.vscode/
+.idea/
+*.iml
+*.swp
+*~
+
+# Backup files
+*.bak
+*.tmp
+*.orig
+*.rej
