@@ -67,7 +67,7 @@ var _ = Describe("Client Tests", func() {
 	var err error
 
 	// A bunch of filenames that may be useful.
-	// aliceFile := "aliceFile.txt"
+	aliceFile := "aliceFile.txt"
 	// bobFile := "bobFile.txt"
 	// charlesFile := "charlesFile.txt"
 	// dorisFile := "dorisFile.txt"
@@ -98,29 +98,46 @@ var _ = Describe("Client Tests", func() {
 			Expect(aliceLaptop).ToNot(BeNil())
 		})
 
+		FSpecify("Basic Test: Testing Single User Store/Load/Append.", func() {
+			userlib.DebugMsg("Initializing user Alice.")
+			alice, err = client.InitUser("alice", defaultPassword)
+			Expect(err).To(BeNil())
+
+			userlib.DebugMsg("Storing file data: %s", contentOne)
+			err = alice.StoreFile(aliceFile, []byte(contentOne))
+			Expect(err).To(BeNil())
+
+			userlib.DebugMsg("Appending file data: %s", contentTwo)
+			err = alice.AppendToFile(aliceFile, []byte(contentTwo))
+			Expect(err).To(BeNil())
+
+			userlib.DebugMsg("Appending file data: %s", contentThree)
+			err = alice.AppendToFile(aliceFile, []byte(contentThree))
+			Expect(err).To(BeNil())
+
+			userlib.DebugMsg("Loading file...")
+			data, err := alice.LoadFile(aliceFile)
+			Expect(err).To(BeNil())
+			Expect(data).To(Equal([]byte(contentOne + contentTwo + contentThree)))
+		})
+
+		FSpecify("Test: Loading or appending to a non-existent file should fail.", func() {
+			// Initialize the user
+			userlib.DebugMsg("Initializing user Alice.")
+			alice, err = client.InitUser("alice", defaultPassword)
+			Expect(err).To(BeNil())
+
+			// Attempt to load a file that was never created
+			userlib.DebugMsg("Attempting to load a non-existent file.")
+			_, err := alice.LoadFile("non_existent_file.txt")
+			Expect(err).ToNot(BeNil())
+
+			// Attempt to append to a file that was never created
+			userlib.DebugMsg("Attempting to append to a non-existent file.")
+			err = alice.AppendToFile("non_existent_file.txt", []byte("some content"))
+			Expect(err).ToNot(BeNil())
+		})
 		/*
-			Specify("Basic Test: Testing Single User Store/Load/Append.", func() {
-				userlib.DebugMsg("Initializing user Alice.")
-				alice, err = client.InitUser("alice", defaultPassword)
-				Expect(err).To(BeNil())
-
-				userlib.DebugMsg("Storing file data: %s", contentOne)
-				err = alice.StoreFile(aliceFile, []byte(contentOne))
-				Expect(err).To(BeNil())
-
-				userlib.DebugMsg("Appending file data: %s", contentTwo)
-				err = alice.AppendToFile(aliceFile, []byte(contentTwo))
-				Expect(err).To(BeNil())
-
-				userlib.DebugMsg("Appending file data: %s", contentThree)
-				err = alice.AppendToFile(aliceFile, []byte(contentThree))
-				Expect(err).To(BeNil())
-
-				userlib.DebugMsg("Loading file...")
-				data, err := alice.LoadFile(aliceFile)
-				Expect(err).To(BeNil())
-				Expect(data).To(Equal([]byte(contentOne + contentTwo + contentThree)))
-			})
 
 			Specify("Basic Test: Testing Create/Accept Invite Functionality with multiple users and multiple instances.", func() {
 				userlib.DebugMsg("Initializing users Alice (aliceDesktop) and Bob.")
@@ -271,6 +288,49 @@ var _ = Describe("Client Tests", func() {
 			Expect(err).ToNot(BeNil())
 			Expect(alice).To(BeNil())
 			userlib.DebugMsg("Successfully detected tampering: GetUser failed as expected.")
+		})
+	})
+
+	Describe("File Operation Integrity Tests", func() {
+
+		FSpecify("Test: Tampering with the file index should be detected by LoadFile.", func() {
+			userlib.DebugMsg("Initializing user Alice.")
+			alice, err = client.InitUser("alice", defaultPassword)
+			Expect(err).To(BeNil())
+
+			aliceFile := "aliceFile.txt"
+			userlib.DebugMsg("Alice storing a file, which creates a file index.")
+			err = alice.StoreFile(aliceFile, []byte(contentOne))
+			Expect(err).To(BeNil())
+
+			userlib.DebugMsg("INTEGRATION: Calling attack to tamper with the file index.")
+			err = client.TamperWithFileIndex("alice")
+			Expect(err).To(BeNil())
+
+			userlib.DebugMsg("Alice attempting to load a file using the now-corrupted index.")
+			_, err = alice.LoadFile(aliceFile)
+			Expect(err).ToNot(BeNil()) // This MUST fail!
+			userlib.DebugMsg("SUCCESS: LoadFile failed as expected, detecting the tampering.")
+		})
+
+		FSpecify("Test: Tampering with a file chunk should be detected by LoadFile.", func() {
+			userlib.DebugMsg("Initializing user Alice.")
+			alice, err = client.InitUser("alice", defaultPassword)
+			Expect(err).To(BeNil())
+
+			aliceFile := "aliceFile.txt"
+			userlib.DebugMsg("Alice storing a file, which creates a content chunk.")
+			err = alice.StoreFile(aliceFile, []byte(contentOne))
+			Expect(err).To(BeNil())
+
+			userlib.DebugMsg("INTEGRATION: Calling attack to tamper with the file chunk.")
+			err = client.TamperWithFileChunk("alice")
+			Expect(err).To(BeNil())
+
+			userlib.DebugMsg("Alice attempting to load the file with a corrupted chunk.")
+			_, err = alice.LoadFile(aliceFile)
+			Expect(err).ToNot(BeNil()) // This MUST fail!
+			userlib.DebugMsg("SUCCESS: LoadFile failed as expected, detecting the tampering.")
 		})
 	})
 })

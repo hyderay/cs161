@@ -93,14 +93,14 @@ func InitUser(userName string, password string) (user *User, err error) {
 	if err != nil {
 		return nil, err
 	}
-	newUser.fileEncKey = fileEncKey
+	newUser.fileEncKey = fileEncKey[:16]
 
 	var fileMacKey []byte
 	fileMacKey, err = userlib.HashKDF(masterSecret, []byte("file-mac-key"))
 	if err != nil {
 		return nil, err
 	}
-	newUser.fileMacKey = fileMacKey
+	newUser.fileMacKey = fileMacKey[:16]
 
 	return newUser, nil
 }
@@ -160,14 +160,14 @@ func GetUser(username string, password string) (user *User, err error) {
 	if err != nil {
 		return nil, err
 	}
-	user.fileEncKey = fileEncKey
+	user.fileEncKey = fileEncKey[:16]
 
 	var fileMacKey []byte
 	fileMacKey, err = userlib.HashKDF(masterSecret, []byte("file-mac-key"))
 	if err != nil {
 		return nil, err
 	}
-	user.fileMacKey = fileMacKey
+	user.fileMacKey = fileMacKey[:16]
 
 	return user, nil
 }
