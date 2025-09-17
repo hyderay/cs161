@@ -13,6 +13,8 @@ type User struct {
 	masterSecret []byte
 	fileEncKey   []byte
 	fileMacKey   []byte
+	signKey      userlib.DSSignKey
+	decKey       userlib.PKEDecKey
 }
 
 type StoreUserData struct {
@@ -23,6 +25,11 @@ type StoreUserData struct {
 type SecureWrapper struct {
 	Data []byte
 	Tag  []byte
+}
+
+type UserPrivateKeys struct {
+	signKey userlib.DSSignKey
+	decKey  userlib.PKEDecKey
 }
 
 func DeriveUserUUID(userName string) (userUUID uuid.UUID, err error) {
@@ -93,14 +100,58 @@ func InitUser(userName string, password string) (user *User, err error) {
 	if err != nil {
 		return nil, err
 	}
-	newUser.fileEncKey = fileEncKey[:16]
+	fileEncKey = fileEncKey[:16]
+	newUser.fileEncKey = fileEncKey
 
 	var fileMacKey []byte
 	fileMacKey, err = userlib.HashKDF(masterSecret, []byte("file-mac-key"))
 	if err != nil {
 		return nil, err
 	}
-	newUser.fileMacKey = fileMacKey[:16]
+	fileMacKey = fileMacKey[:16]
+	newUser.fileMacKey = fileMacKey
+
+	signKey, verifyKey, err := userlib.DSKeyGen()
+	if err != nil {
+		return nil, err
+	}
+	encKey, decKey, err := userlib.PKEKeyGen()
+	if err != nil {
+		return nil, err
+	}
+
+	err = userlib.KeystoreSet(userName+"_DSVerify", verifyKey)
+	if err != nil {
+		return nil, err
+	}
+	err = userlib.KeystoreSet(userName+"_PKE", encKey)
+	if err != nil {
+		return nil, err
+	}
+
+	privateKeysUUID, err := uuid.FromBytes(userlib.Hash([]byte(userName + "private-keys"))[:16])
+	if err != nil {
+		return nil, err
+	}
+
+	var userPrivateKeys UserPrivateKeys
+	userPrivateKeys.decKey = decKey
+	userPrivateKeys.signKey = signKey
+
+	userPrivateKeyBytes, err := json.Marshal(userPrivateKeys)
+	if err != nil {
+		return nil, err
+	}
+
+	wrapperUserPriBytes, err := AuthenticatedEncrypt(userPrivateKeyBytes, fileEncKey, fileMacKey)
+	if err != nil {
+		return nil, err
+	}
+
+	userlib.DatastoreSet(privateKeysUUID, wrapperUserPriBytes)
+
+	newUser.decKey = decKey
+	newUser.signKey = signKey
 
 	return newUser, nil
 }
@@ -160,14 +211,40 @@ func GetUser(username string, password string) (user *User, err error) {
 	if err != nil {
 		return nil, err
 	}
-	user.fileEncKey = fileEncKey[:16]
+	fileEncKey = fileEncKey[:16]
+	user.fileEncKey = fileEncKey
 
 	var fileMacKey []byte
 	fileMacKey, err = userlib.HashKDF(masterSecret, []byte("file-mac-key"))
 	if err != nil {
 		return nil, err
 	}
-	user.fileMacKey = fileMacKey[:16]
+	fileMacKey = fileMacKey[:16]
+	user.fileMacKey = fileMacKey
+
+	userPriKeysUUID, err := uuid.FromBytes(userlib.Hash([]byte(username + "private-keys"))[:16])
+	if err != nil {
+		return nil, err
+	}
+
+	wrapperUserPriBytes, ok := userlib.DatastoreGet(userPriKeysUUID)
+	if !ok {
+		err = errors.New("User does not have private keys.")
+	}
+
+	userPriKeysBytes, err := AuthenticatedDecrypt(wrapperUserPriBytes, fileEncKey, fileMacKey)
+	if err != nil {
+		return nil, err
+	}
+
+	var userPrivateKeys UserPrivateKeys
+	err = json.Unmarshal(userPriKeysBytes, &userPrivateKeys)
+	if err != nil {
+		return nil, err
+	}
+
+	user.decKey = userPrivateKeys.decKey
+	user.signKey = userPrivateKeys.signKey
 
 	return user, nil
 }
