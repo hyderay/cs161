@@ -14,6 +14,12 @@ type FileChunk struct {
 	PreChunkUUID uuid.UUID
 }
 
+type FileInfo struct {
+	ContentEncKey []byte
+	ContentMacKey []byte
+	CurrChunkUUID uuid.UUID
+}
+
 func AuthenticatedEncrypt(data []byte, encKey []byte, macKey []byte) (wrappedBytes []byte, err error) {
 	var iv []byte
 	iv = userlib.RandomBytes(16)
@@ -96,17 +102,42 @@ func (user *User) StoreFile(filename string, content []byte) (err error) {
 		return err
 	}
 
-	wrappedChunk, err := AuthenticatedEncrypt(chunkBytes, user.fileEncKey, user.fileMacKey)
+	var filenameHash string
+	filenameHash = hex.EncodeToString(userlib.Hash([]byte(filename)))
+	fileInfoUUID, fileExist := fileIndex[filenameHash]
+	var fileInfo FileInfo
+
+	if fileExist {
+		wrappedInfo, ok := userlib.DatastoreGet(fileInfoUUID)
+		if !ok {
+			return errors.New("File info is missing.")
+		}
+
+		fileInfoBytes, err := AuthenticatedDecrypt(wrappedInfo, user.fileEncKey, user.fileMacKey)
+		if err != nil {
+			return err
+		}
+
+		err = json.Unmarshal(fileInfoBytes, &fileInfo)
+		if err != nil {
+			return err
+		}
+	} else {
+		fileInfoUUID = uuid.New()
+		fileInfo.ContentEncKey = userlib.RandomBytes(16)
+		fileInfo.ContentMacKey = userlib.RandomBytes(16)
+	}
+
+	wrappedChunk, err := AuthenticatedEncrypt(chunkBytes, fileInfo.ContentEncKey, fileInfo.ContentEncKey)
 	if err != nil {
 		return err
 	}
 	chunkUUID := uuid.New()
 	userlib.DatastoreSet(chunkUUID, wrappedChunk)
 
-	var filenameHash string
-	filenameHash = hex.EncodeToString(userlib.Hash([]byte(filename)))
+	fileInfo.CurrChunkUUID = chunkUUID
 
-	fileIndex[filenameHash] = chunkUUID
+	fileIndex[filenameHash] = fileInfoUUID
 
 	indexBytes, err := json.Marshal(fileIndex)
 	if err != nil {
@@ -150,17 +181,33 @@ func (user *User) LoadFile(filename string) (content []byte, err error) {
 	}
 
 	filenameHash := hex.EncodeToString(userlib.Hash([]byte(filename)))
-	chunkUUID, ok := fileIndex[filenameHash]
+	fileInfoUUID, ok := fileIndex[filenameHash]
 	if !ok {
-		return nil, errors.New("No such file.")
+		return nil, errors.New("File info is missing.")
 	}
 
-	wrappedChunk, ok := userlib.DatastoreGet(chunkUUID)
+	wrappedInfo, ok := userlib.DatastoreGet(fileInfoUUID)
 	if !ok {
 		return nil, errors.New("Data were tempered.")
 	}
 
-	chunkBytes, err := AuthenticatedDecrypt(wrappedChunk, user.fileEncKey, user.fileMacKey)
+	infoBytes, err := AuthenticatedDecrypt(wrappedInfo, user.fileEncKey, user.fileMacKey)
+	if err != nil {
+		return nil, err
+	}
+
+	var fileInfo FileInfo
+	err = json.Unmarshal(infoBytes, &fileInfo)
+	if err != nil {
+		return nil, err
+	}
+
+	wrappedChunk, ok := userlib.DatastoreGet(fileInfo.CurrChunkUUID)
+	if !ok {
+		return nil, errors.New("No chunk info obtained.")
+	}
+
+	chunkBytes, err := AuthenticatedDecrypt(wrappedChunk, fileInfo.ContentEncKey, fileInfo.ContentMacKey)
 	if err != nil {
 		return nil, err
 	}
@@ -228,9 +275,25 @@ func (user *User) AppendToFile(filename string, content []byte) (err error) {
 	}
 
 	filenameHash := hex.EncodeToString(userlib.Hash([]byte(filename)))
-	chunkUUID, ok := fileIndex[filenameHash]
+	fileInfoUUID, ok := fileIndex[filenameHash]
 	if !ok {
 		return errors.New("No such file.")
+	}
+
+	wrappedFileInfo, ok := userlib.DatastoreGet(fileInfoUUID)
+	if !ok {
+		return errors.New("File info is missing.")
+	}
+
+	fileInfoBytes, err := AuthenticatedDecrypt(wrappedFileInfo, user.fileEncKey, user.fileMacKey)
+	if err != nil {
+		return err
+	}
+
+	var fileInfo FileInfo
+	err = json.Unmarshal(fileInfoBytes, &fileInfo)
+	if err != nil {
+		return err
 	}
 
 	var newChunkUUID uuid.UUID
@@ -238,7 +301,7 @@ func (user *User) AppendToFile(filename string, content []byte) (err error) {
 
 	var newChunk FileChunk
 	newChunk.Content = content
-	newChunk.PreChunkUUID = chunkUUID
+	newChunk.PreChunkUUID = fileInfo.CurrChunkUUID
 
 	chunkBytes, err := json.Marshal(newChunk)
 	if err != nil {
@@ -252,17 +315,18 @@ func (user *User) AppendToFile(filename string, content []byte) (err error) {
 
 	userlib.DatastoreSet(newChunkUUID, wrappedChunkBytes)
 
-	fileIndex[filenameHash] = newChunkUUID
-	indexBytes, err = json.Marshal(fileIndex)
+	fileInfo.CurrChunkUUID = newChunkUUID
+	fileInfoBytes, err = json.Marshal(fileInfo)
 	if err != nil {
 		return err
 	}
 
-	wrappedIndexBytes, err = AuthenticatedEncrypt(indexBytes, user.fileEncKey, user.fileMacKey)
+	wrappedFileInfo, err = AuthenticatedEncrypt(fileInfoBytes, user.fileEncKey, user.fileMacKey)
 	if err != nil {
 		return err
 	}
 
-	userlib.DatastoreSet(fileIndexUUID, wrappedIndexBytes)
+	userlib.DatastoreSet(fileInfoUUID, wrappedFileInfo)
+
 	return nil
 }

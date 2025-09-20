@@ -28,8 +28,8 @@ type SecureWrapper struct {
 }
 
 type UserPrivateKeys struct {
-	signKey userlib.DSSignKey
-	decKey  userlib.PKEDecKey
+	SignKey userlib.DSSignKey
+	DecKey  userlib.PKEDecKey
 }
 
 func DeriveUserUUID(userName string) (userUUID uuid.UUID, err error) {
@@ -135,8 +135,8 @@ func InitUser(userName string, password string) (user *User, err error) {
 	}
 
 	var userPrivateKeys UserPrivateKeys
-	userPrivateKeys.decKey = decKey
-	userPrivateKeys.signKey = signKey
+	userPrivateKeys.DecKey = decKey
+	userPrivateKeys.SignKey = signKey
 
 	userPrivateKeyBytes, err := json.Marshal(userPrivateKeys)
 	if err != nil {
@@ -243,8 +243,8 @@ func GetUser(username string, password string) (user *User, err error) {
 		return nil, err
 	}
 
-	user.decKey = userPrivateKeys.decKey
-	user.signKey = userPrivateKeys.signKey
+	user.decKey = userPrivateKeys.DecKey
+	user.signKey = userPrivateKeys.SignKey
 
 	return user, nil
 }
