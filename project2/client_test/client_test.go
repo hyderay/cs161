@@ -332,5 +332,25 @@ var _ = Describe("Client Tests", func() {
 			Expect(err).ToNot(BeNil()) // This MUST fail!
 			userlib.DebugMsg("SUCCESS: LoadFile failed as expected, detecting the tampering.")
 		})
+
+		FSpecify("Test: Tampering with a FileInfo metadata block should be detected.", func() {
+			userlib.DebugMsg("Initializing user Alice.")
+			alice, err = client.InitUser("alice", defaultPassword)
+			Expect(err).To(BeNil())
+
+			userlib.DebugMsg("Alice storing a file, which creates a FileInfo struct.")
+			err = alice.StoreFile(aliceFile, []byte(contentOne))
+			Expect(err).To(BeNil())
+
+			userlib.DebugMsg("INTEGRATION: Calling attack to tamper with the FileInfo.")
+			// FIXED: Removed the unused filename parameter from the call.
+			err = client.TamperWithFileInfo("alice")
+			Expect(err).To(BeNil())
+
+			userlib.DebugMsg("Alice attempting to load the file using the corrupted FileInfo.")
+			_, err = alice.LoadFile(aliceFile)
+			Expect(err).ToNot(BeNil())
+			userlib.DebugMsg("SUCCESS: LoadFile failed as expected, detecting the tampering.")
+		})
 	})
 })

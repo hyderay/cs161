@@ -67,6 +67,51 @@ func TamperWithFileIndex(username string) error {
 	return nil
 }
 
+func TamperWithFileInfo(username string) error {
+	userUUID, err := DeriveUserUUID(username)
+	if err != nil {
+		return err
+	}
+	fileIndexUUID, err := uuid.FromBytes(userlib.Hash([]byte(username + "fileIndex"))[:16])
+	if err != nil {
+		return err
+	}
+
+	userPriKeysUUID, err := uuid.FromBytes(userlib.Hash([]byte(username + "private-keys"))[:16])
+	if err != nil {
+		return err
+	}
+
+	var fileInfoUUID uuid.UUID
+	datastoreMap := userlib.DatastoreGetMap()
+	for key := range datastoreMap {
+		if key != userUUID && key != fileIndexUUID && key != userPriKeysUUID {
+			fileInfoUUID = key
+			break
+		}
+	}
+	if fileInfoUUID == uuid.Nil {
+		return errors.New("could not find a FileInfo to tamper with")
+	}
+
+	wrapperBytes, ok := userlib.DatastoreGet(fileInfoUUID)
+	if !ok {
+		return errors.New("could not retrieve FileInfo to tamper with")
+	}
+	var secureWrapper SecureWrapper
+	err = json.Unmarshal(wrapperBytes, &secureWrapper)
+	if err != nil {
+		return err
+	}
+	secureWrapper.Data[0] = secureWrapper.Data[0] ^ 1
+	corruptedWrapperBytes, err := json.Marshal(secureWrapper)
+	if err != nil {
+		return err
+	}
+	userlib.DatastoreSet(fileInfoUUID, corruptedWrapperBytes)
+	return nil
+}
+
 func TamperWithFileChunk(username string) error {
 	userUUID, err := DeriveUserUUID(username)
 	if err != nil {
@@ -77,11 +122,16 @@ func TamperWithFileChunk(username string) error {
 		return err
 	}
 
+	userPriKeysUUID, err := uuid.FromBytes(userlib.Hash([]byte(username + "private-keys"))[:16])
+	if err != nil {
+		return err
+	}
+
 	// Find a chunk UUID to tamper with.
 	var chunkUUID uuid.UUID
 	datastoreMap := userlib.DatastoreGetMap()
 	for key := range datastoreMap {
-		if key != userUUID && key != fileIndexUUID {
+		if key != userUUID && key != fileIndexUUID && key != userPriKeysUUID {
 			chunkUUID = key
 			break
 		}

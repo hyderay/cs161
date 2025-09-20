@@ -128,7 +128,7 @@ func (user *User) StoreFile(filename string, content []byte) (err error) {
 		fileInfo.ContentMacKey = userlib.RandomBytes(16)
 	}
 
-	wrappedChunk, err := AuthenticatedEncrypt(chunkBytes, fileInfo.ContentEncKey, fileInfo.ContentEncKey)
+	wrappedChunk, err := AuthenticatedEncrypt(chunkBytes, fileInfo.ContentEncKey, fileInfo.ContentMacKey)
 	if err != nil {
 		return err
 	}
@@ -149,6 +149,16 @@ func (user *User) StoreFile(filename string, content []byte) (err error) {
 		return err
 	}
 	userlib.DatastoreSet(fileIndexUUID, wrappedIndex)
+
+	fileInfoBytes, err := json.Marshal(fileInfo)
+	if err != nil {
+		return err
+	}
+	wrappedInfo, err := AuthenticatedEncrypt(fileInfoBytes, user.fileEncKey, user.fileMacKey)
+	if err != nil {
+		return err
+	}
+	userlib.DatastoreSet(fileInfoUUID, wrappedInfo)
 
 	return nil
 }
@@ -229,7 +239,7 @@ func (user *User) LoadFile(filename string) (content []byte, err error) {
 			return nil, errors.New("Data were tempered.")
 		}
 
-		chunkBytes, err = AuthenticatedDecrypt(wrappedChunk, user.fileEncKey, user.fileMacKey)
+		chunkBytes, err = AuthenticatedDecrypt(wrappedChunk, fileInfo.ContentEncKey, fileInfo.ContentMacKey)
 		if err != nil {
 			return nil, err
 		}
@@ -308,7 +318,7 @@ func (user *User) AppendToFile(filename string, content []byte) (err error) {
 		return err
 	}
 
-	wrappedChunkBytes, err := AuthenticatedEncrypt(chunkBytes, user.fileEncKey, user.fileMacKey)
+	wrappedChunkBytes, err := AuthenticatedEncrypt(chunkBytes, fileInfo.ContentEncKey, fileInfo.ContentMacKey)
 	if err != nil {
 		return err
 	}
