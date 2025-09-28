@@ -51,14 +51,11 @@ func InitUser(userName string, password string) (user *User, err error) {
 		return nil, errors.New("user already exists")
 	}
 
-	var salt []byte
-	salt = userlib.RandomBytes(16)
+	salt := userlib.RandomBytes(16)
 
-	var masterSecret []byte
-	masterSecret = userlib.Argon2Key([]byte(password), salt, 16)
+	masterSecret := userlib.Argon2Key([]byte(password), salt, 16)
 
-	var userData StoreUserData
-	userData = StoreUserData{
+	userData := StoreUserData{
 		UserName: userName,
 		Salt:     salt,
 	}
@@ -75,8 +72,7 @@ func InitUser(userName string, password string) (user *User, err error) {
 		return nil, err
 	}
 
-	var wrapper SecureWrapper
-	wrapper = SecureWrapper{
+	wrapper := SecureWrapper{
 		Data: userDataBytes,
 		Tag:  tag,
 	}
@@ -167,7 +163,7 @@ func GetUser(username string, password string) (user *User, err error) {
 	var ok bool
 	wrapperBytes, ok = userlib.DatastoreGet(UUID)
 	if !ok {
-		err = errors.New("Incorrect username")
+		err = errors.New("incorrect username")
 		return nil, err
 	}
 
@@ -183,11 +179,9 @@ func GetUser(username string, password string) (user *User, err error) {
 		return nil, err
 	}
 
-	var salt []byte
-	salt = userdata.Salt
+	salt := userdata.Salt
 
-	var masterSecret []byte
-	masterSecret = userlib.Argon2Key([]byte(password), salt, 16)
+	masterSecret := userlib.Argon2Key([]byte(password), salt, 16)
 
 	var expectedTag []byte
 	expectedTag, err = userlib.HMACEval(masterSecret, wrapper.Data)
@@ -197,7 +191,7 @@ func GetUser(username string, password string) (user *User, err error) {
 
 	ok = userlib.HMACEqual(expectedTag, wrapper.Tag)
 	if !ok {
-		err = errors.New("Incorrect password")
+		err = errors.New("incorrect password")
 		return nil, err
 	}
 
@@ -229,7 +223,8 @@ func GetUser(username string, password string) (user *User, err error) {
 
 	wrapperUserPriBytes, ok := userlib.DatastoreGet(userPriKeysUUID)
 	if !ok {
-		err = errors.New("User does not have private keys.")
+		err = errors.New("user does not have private keys")
+		return nil, err
 	}
 
 	userPriKeysBytes, err := AuthenticatedDecrypt(wrapperUserPriBytes, fileEncKey, fileMacKey)

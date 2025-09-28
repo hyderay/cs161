@@ -352,5 +352,24 @@ var _ = Describe("Client Tests", func() {
 			Expect(err).ToNot(BeNil())
 			userlib.DebugMsg("SUCCESS: LoadFile failed as expected, detecting the tampering.")
 		})
+
+		FSpecify("Test: Tampering with an AccessNode should be detected by LoadFile.", func() {
+			userlib.DebugMsg("Initializing user Alice.")
+			alice, err = client.InitUser("alice", defaultPassword)
+			Expect(err).To(BeNil())
+
+			userlib.DebugMsg("Alice storing a file, which creates an AccessNode.")
+			err = alice.StoreFile(aliceFile, []byte(contentOne))
+			Expect(err).To(BeNil())
+
+			userlib.DebugMsg("INTEGRATION: Calling attack to tamper with the AccessNode.")
+			err = client.TamperWithAccessNode("alice")
+			Expect(err).To(BeNil())
+
+			userlib.DebugMsg("Alice attempting to load the file using the corrupted AccessNode.")
+			_, err = alice.LoadFile(aliceFile)
+			Expect(err).ToNot(BeNil()) // This MUST fail!
+			userlib.DebugMsg("SUCCESS: LoadFile failed as expected, detecting the tampering.")
+		})
 	})
 })
