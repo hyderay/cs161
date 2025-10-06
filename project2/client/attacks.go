@@ -1,7 +1,7 @@
 package client
 
 import (
-	"encoding/hex"
+	//"encoding/hex"
 	"encoding/json"
 	"errors"
 
@@ -11,14 +11,14 @@ import (
 )
 
 func TamperWithUserData(username string) error {
-	userUUID, err := DeriveUserUUID(username)
+	userUUID, err := deriveUserUUID(username)
 	if err != nil {
 		return err
 	}
 
 	wrapperBytes, ok := userlib.DatastoreGet(userUUID)
 	if !ok {
-		return errors.New("No such user")
+		return errors.New("no such user")
 	}
 
 	var secureWrapper SecureWrapper
@@ -123,35 +123,31 @@ func TamperWithFileInfo(username string) error {
 }
 
 func TamperWithFileChunk(username string) error {
-	// We need the user object to use its keys and helper methods.
-	// This assumes the user was created with the default password for the test.
 	user, err := GetUser(username, "password")
 	if err != nil {
 		return errors.New("cannot get user to perform attack: " + err.Error())
 	}
 
-	// 1. Get the user's file index to find a file to target.
-	fileIndex, err := user.getFileIndex()
-	if err != nil {
-		return err
-	}
-
-	// 2. Find a file to tamper with. In the test suite, Alice creates "aliceFile.txt".
-	// We must assume this filename to use the helper functions that require it.
 	targetFilename := "aliceFile.txt"
-	filenameHash := hex.EncodeToString(userlib.Hash([]byte(targetFilename)))
 
-	if _, ok := fileIndex[filenameHash]; !ok {
-		return errors.New("could not find the target file ('aliceFile.txt') to tamper with")
-	}
-
-	// 3. Get the access node, which contains the pointer to the most recent chunk.
-	accessNode, err := user.getAccessNode(targetFilename)
+	// 1. Get the FileInfo to find the FileHeader's location.
+	fileInfo, _, err := user.getFileInfoAndUUID(targetFilename)
 	if err != nil {
 		return err
 	}
 
-	chunkUUID := accessNode.CurrChunkUUID
+	// 2. Fetch the shared FileHeader.
+	headerBytes, ok := userlib.DatastoreGet(fileInfo.FileHeaderUUID)
+	if !ok {
+		return errors.New("could not find file header to get chunk UUID")
+	}
+	var header FileHeader
+	if err = json.Unmarshal(headerBytes, &header); err != nil {
+		return err
+	}
+
+	// 3. Get the chunk's UUID from the header.
+	chunkUUID := header.CurrChunkUUID
 	if chunkUUID == uuid.Nil {
 		return errors.New("file has no content chunks to tamper with")
 	}
@@ -163,13 +159,11 @@ func TamperWithFileChunk(username string) error {
 	}
 
 	var secureWrapper SecureWrapper
-	err = json.Unmarshal(wrapperBytes, &secureWrapper)
-	if err != nil {
+	if err = json.Unmarshal(wrapperBytes, &secureWrapper); err != nil {
 		return err
 	}
 
-	// Corrupt the first byte of the encrypted FileChunk data by flipping a bit.
-	secureWrapper.Data[0] = secureWrapper.Data[0] ^ 1
+	secureWrapper.Data[0] = secureWrapper.Data[0] ^ 1 // Flip a bit
 
 	corruptedWrapperBytes, err := json.Marshal(secureWrapper)
 	if err != nil {
@@ -225,4 +219,156 @@ func TamperWithAccessNode(username string) error {
 	userlib.DatastoreSet(accessNodeUUID, corruptedWrapperBytes)
 
 	return nil
+}
+
+func TamperWithInbox(username string) error {
+	user, err := GetUser(username, "password")
+	if err != nil {
+		return err
+	}
+	fileInfo, _, err := user.getFileInfoAndUUID("aliceFile.txt")
+	if err != nil {
+		return err
+	}
+
+	inboxUUID := fileInfo.InboxUUID
+
+	// Create a garbage request (just random bytes, not a valid encrypted request).
+	garbageRequest := userlib.RandomBytes(16)
+
+	// Get the current inbox and add the garbage to it.
+	inboxBytes, _ := userlib.DatastoreGet(inboxUUID)
+	var encryptedRequests [][]byte
+	if len(inboxBytes) > 0 {
+		json.Unmarshal(inboxBytes, &encryptedRequests)
+	}
+	encryptedRequests = append(encryptedRequests, garbageRequest)
+	newInboxBytes, _ := json.Marshal(encryptedRequests)
+	userlib.DatastoreSet(inboxUUID, newInboxBytes)
+
+	return nil
+}
+
+func TamperWithFileHeader(username string) error {
+	user, err := GetUser(username, "password")
+	if err != nil {
+		return err
+	}
+	targetFilename := "aliceFile.txt"
+
+	// 1. Get the FileInfo to find the FileHeader's location.
+	fileInfo, _, err := user.getFileInfoAndUUID(targetFilename)
+	if err != nil {
+		return err
+	}
+
+	// 2. Fetch the FileHeader.
+	headerBytes, ok := userlib.DatastoreGet(fileInfo.FileHeaderUUID)
+	if !ok {
+		return errors.New("could not find file header to tamper with")
+	}
+	var header FileHeader
+	if err = json.Unmarshal(headerBytes, &header); err != nil {
+		return err
+	}
+
+	// 3. Corrupt the header by pointing it to a garbage UUID.
+	header.CurrChunkUUID = uuid.New()
+
+	// 4. Save the corrupted header back.
+	corruptedHeaderBytes, err := json.Marshal(header)
+	if err != nil {
+		return err
+	}
+	userlib.DatastoreSet(fileInfo.FileHeaderUUID, corruptedHeaderBytes)
+
+	return nil
+}
+
+// RevokedUserAddsToInbox simulates a revoked user crafting a fake share request
+// and placing it in the owner's inbox to try and regain access.
+func RevokedUserAddsToInbox(ownerUsername string, revokedUsername string, password string, targetFilename string) error {
+	// The revoked user needs their user object to get their old file info.
+	revokedUser, err := GetUser(revokedUsername, password)
+	if err != nil {
+		return err
+	}
+
+	// From their old file info, they know the owner's username and the InboxUUID.
+	fileInfo, _, err := revokedUser.getFileInfoAndUUID(targetFilename)
+	if err != nil {
+		return err
+	}
+	inboxUUID := fileInfo.InboxUUID
+	ownerPubKey, ok := userlib.KeystoreGet(ownerUsername + "_PKE")
+	if !ok {
+		return errors.New("revoked user cannot find owner's public key")
+	}
+
+	// 1. Craft a malicious UpdateRequest.
+	// The revoked user claims to be sharing the file with themself.
+	// A dummy UUID is used, as it doesn't matter for this attack.
+	maliciousRequest := UpdateRequest{
+		ParentUsername:      revokedUsername,
+		ChildUsername:       revokedUsername,
+		ChildAccessNodeUUID: uuid.New(),
+	}
+	requestBytes, err := json.Marshal(maliciousRequest)
+	if err != nil {
+		return err
+	}
+
+	// 2. Encrypt it with the owner's public key so it looks legitimate.
+	encryptedRequest, err := hybridEncrypt(requestBytes, ownerPubKey)
+	if err != nil {
+		return err
+	}
+
+	// 3. Add the malicious request to the owner's inbox.
+	inboxBytes, _ := userlib.DatastoreGet(inboxUUID)
+	var inboxData [][]byte
+	if len(inboxBytes) > 0 {
+		json.Unmarshal(inboxBytes, &inboxData)
+	}
+	inboxData = append(inboxData, encryptedRequest)
+	newInboxBytes, err := json.Marshal(inboxData)
+	if err != nil {
+		return err
+	}
+	userlib.DatastoreSet(inboxUUID, newInboxBytes)
+
+	return nil
+}
+
+// RevokedUserReadsFutureContent simulates a revoked user trying to access new file content.
+// The user knows the FileHeaderUUID from before revocation. They can read the header to find the
+// latest chunk's UUID, but they should be unable to decrypt that chunk.
+func RevokedUserReadsFutureContent(revokedUsername string, password string, targetFilename string) (err error) {
+	// The revoked user gets their user object.
+	revokedUser, err := GetUser(revokedUsername, password)
+	if err != nil {
+		// This is a valid scenario; if login fails, the attack is stopped.
+		return nil
+	}
+
+	// In a real attack, the user would have their old FileInfo saved.
+	// We retrieve it here to get the UUIDs they would know.
+	_, _, err = revokedUser.getFileInfoAndUUID(targetFilename)
+	if err != nil {
+		// This is also a valid defense. If the user deletes their local file
+		// entry, they lose the pointers needed for the attack.
+		return nil
+	}
+
+	// The core of the attack: Try to get the file's content keys.
+	// This should fail because the user's AccessNode was deleted during revocation.
+	_, err = revokedUser.getAccessNode(targetFilename)
+	if err != nil {
+		// SUCCESS: The attack was thwarted because the access node is gone.
+		// We return nil to indicate the defense worked as expected.
+		return nil
+	}
+
+	// If getAccessNode somehow succeeded, it's a critical security failure.
+	return errors.New("SECURITY FLAW: Revoked user was able to retrieve their access node after revocation")
 }

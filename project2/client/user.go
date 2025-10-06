@@ -8,42 +8,13 @@ import (
 	"github.com/google/uuid"
 )
 
-type User struct {
-	userName     string
-	masterSecret []byte
-	fileEncKey   []byte
-	fileMacKey   []byte
-	signKey      userlib.DSSignKey
-	decKey       userlib.PKEDecKey
-}
-
-type StoreUserData struct {
-	UserName string
-	Salt     []byte
-}
-
-type SecureWrapper struct {
-	Data []byte
-	Tag  []byte
-}
-
-type UserPrivateKeys struct {
-	SignKey userlib.DSSignKey
-	DecKey  userlib.PKEDecKey
-}
-
-func DeriveUserUUID(userName string) (userUUID uuid.UUID, err error) {
-	userNameHash := userlib.Hash([]byte(userName))
-	return uuid.FromBytes(userNameHash[:16])
-}
-
 func InitUser(userName string, password string) (user *User, err error) {
 	if userName == "" {
 		return nil, errors.New("username cannot be empty")
 	}
 
 	var userUUID uuid.UUID
-	userUUID, err = DeriveUserUUID(userName)
+	userUUID, err = deriveUserUUID(userName)
 	if err != nil {
 		return nil, err
 	}
@@ -139,7 +110,7 @@ func InitUser(userName string, password string) (user *User, err error) {
 		return nil, err
 	}
 
-	wrapperUserPriBytes, err := AuthenticatedEncrypt(userPrivateKeyBytes, fileEncKey, fileMacKey)
+	wrapperUserPriBytes, err := authenticatedEncrypt(userPrivateKeyBytes, fileEncKey, fileMacKey)
 	if err != nil {
 		return nil, err
 	}
@@ -154,7 +125,7 @@ func InitUser(userName string, password string) (user *User, err error) {
 
 func GetUser(username string, password string) (user *User, err error) {
 	var UUID uuid.UUID
-	UUID, err = DeriveUserUUID(username)
+	UUID, err = deriveUserUUID(username)
 	if err != nil {
 		return nil, err
 	}
@@ -227,7 +198,7 @@ func GetUser(username string, password string) (user *User, err error) {
 		return nil, err
 	}
 
-	userPriKeysBytes, err := AuthenticatedDecrypt(wrapperUserPriBytes, fileEncKey, fileMacKey)
+	userPriKeysBytes, err := authenticatedDecrypt(wrapperUserPriBytes, fileEncKey, fileMacKey)
 	if err != nil {
 		return nil, err
 	}
