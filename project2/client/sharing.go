@@ -15,6 +15,13 @@ func (user *User) CreateInvitation(filename string, recipientName string) (invit
 		return uuid.Nil, err
 	}
 
+	if fileInfo.OwnerUsername == user.userName {
+		err = user.syncInbox(fileInfo)
+		if err != nil {
+			return uuid.Nil, err
+		}
+	}
+
 	accessNode, err := user.getAccessNode(filename)
 	if err != nil {
 		return uuid.Nil, err
@@ -34,15 +41,20 @@ func (user *User) CreateInvitation(filename string, recipientName string) (invit
 		return uuid.Nil, err
 	}
 
-	hybridEncryptBytes, err := hybridEncrypt(reACNodeBytes, recipientPBKey)
-	if err != nil {
-		return uuid.Nil, err
+	ownerPubKey, ok := userlib.KeystoreGet(fileInfo.OwnerUsername + "_PKE")
+	if !ok {
+		return uuid.Nil, errors.New("cannot find owner's public key")
 	}
 
 	reACNodeUUID := uuid.New()
-	userlib.DatastoreSet(reACNodeUUID, hybridEncryptBytes)
 
 	if fileInfo.OwnerUsername == user.userName {
+		hybridEncryptBytes, err := hybridEncrypt(reACNodeBytes, recipientPBKey)
+		if err != nil {
+			return uuid.Nil, err
+		}
+		userlib.DatastoreSet(reACNodeUUID, hybridEncryptBytes)
+
 		metadata, err := user.getFileMetadata(fileInfo)
 		if err != nil {
 			return uuid.Nil, err
@@ -62,6 +74,12 @@ func (user *User) CreateInvitation(filename string, recipientName string) (invit
 		userlib.DatastoreSet(fileInfo.MetadataUUID, wrappedMetadata)
 
 	} else {
+		hybridEncryptBytes, err := hybridEncrypt(reACNodeBytes, ownerPubKey)
+		if err != nil {
+			return uuid.Nil, err
+		}
+		userlib.DatastoreSet(reACNodeUUID, hybridEncryptBytes)
+
 		var request UpdateRequest
 		request.ParentUsername = user.userName
 		request.ChildUsername = recipientName
@@ -72,12 +90,7 @@ func (user *User) CreateInvitation(filename string, recipientName string) (invit
 			return uuid.Nil, err
 		}
 
-		ownerPubKey, ok := userlib.KeystoreGet(fileInfo.OwnerUsername + "_PKE")
-		if !ok {
-			return uuid.Nil, errors.New("cannot find owner's public key")
-		}
-
-		hybridEncryptBytes, err := hybridEncrypt(requestBytes, ownerPubKey)
+		hybridEncryptBytes, err = hybridEncrypt(requestBytes, ownerPubKey)
 		if err != nil {
 			return uuid.Nil, err
 		}
@@ -110,25 +123,27 @@ func (user *User) CreateInvitation(filename string, recipientName string) (invit
 	if err != nil {
 		return uuid.Nil, err
 	}
-	wrappedInvitation, err := hybridEncrypt(invitationBytes, recipientPBKey)
-	if err != nil {
-		return uuid.Nil, err
-	}
-	signature, err := userlib.DSSign(user.signKey, wrappedInvitation)
+	signature, err := userlib.DSSign(user.signKey, invitationBytes)
 	if err != nil {
 		return uuid.Nil, err
 	}
 
 	var invitationWrapper InvitationWrapper
-	invitationWrapper.WrappedInvitation = wrappedInvitation
+	invitationWrapper.InvitationBytes = invitationBytes
 	invitationWrapper.Signature = signature
 
 	inviWrapperBytes, err := json.Marshal(invitationWrapper)
 	if err != nil {
 		return uuid.Nil, err
 	}
+
+	wrappedInvitaion, err := hybridEncrypt(inviWrapperBytes, recipientPBKey)
+	if err != nil {
+		return uuid.Nil, err
+	}
+
 	invitationPtr = uuid.New()
-	userlib.DatastoreSet(invitationPtr, inviWrapperBytes)
+	userlib.DatastoreSet(invitationPtr, wrappedInvitaion)
 
 	return invitationPtr, nil
 }
@@ -145,12 +160,18 @@ func (user *User) AcceptInvitation(senderUsername string, invitationPtr uuid.UUI
 		return errors.New("a file with name already exists")
 	}
 
-	invitationWrapperBytes, ok := userlib.DatastoreGet(invitationPtr)
+	wrappedInvitation, ok := userlib.DatastoreGet(invitationPtr)
 	if !ok {
 		return errors.New("there is something wrong with the given invitationPtr")
 	}
+
+	inviWrapperBytes, err := hybridDecrypt(wrappedInvitation, user.decKey)
+	if err != nil {
+		return err
+	}
+
 	var invitationWrapper InvitationWrapper
-	err = json.Unmarshal(invitationWrapperBytes, &invitationWrapper)
+	err = json.Unmarshal(inviWrapperBytes, &invitationWrapper)
 	if err != nil {
 		return err
 	}
@@ -159,18 +180,13 @@ func (user *User) AcceptInvitation(senderUsername string, invitationPtr uuid.UUI
 	if !ok {
 		return errors.New("cannot get the sender's signature key")
 	}
-	err = userlib.DSVerify(DSVerifyKey, invitationWrapper.WrappedInvitation, invitationWrapper.Signature)
-	if err != nil {
-		return err
-	}
-
-	invitationBytes, err := hybridDecrypt(invitationWrapper.WrappedInvitation, user.decKey)
+	err = userlib.DSVerify(DSVerifyKey, invitationWrapper.InvitationBytes, invitationWrapper.Signature)
 	if err != nil {
 		return err
 	}
 
 	var invitation Invitation
-	err = json.Unmarshal(invitationBytes, &invitation)
+	err = json.Unmarshal(invitationWrapper.InvitationBytes, &invitation)
 	if err != nil {
 		return err
 	}

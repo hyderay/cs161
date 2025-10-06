@@ -230,6 +230,13 @@ func (user *User) AppendToFile(filename string, content []byte) (err error) {
 		return err
 	}
 
+	if fileInfo.OwnerUsername == user.userName {
+		err = user.syncInbox(fileInfo)
+		if err != nil {
+			return err
+		}
+	}
+
 	accessNode, err := user.getAccessNode(filename)
 	if err != nil {
 		return err

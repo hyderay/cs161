@@ -156,7 +156,16 @@ func hybridDecrypt(hybridBytes []byte, recipientPKEKey userlib.PKEDecKey) ([]byt
 		return nil, err
 	}
 
-	plaintext, err := authenticatedDecrypt(hybridEncrypted.Ciphertext, realKey, realKey)
+	encKey, err := userlib.HashKDF(realKey, []byte("enc"))
+	if err != nil {
+		return nil, err
+	}
+	macKey, err := userlib.HashKDF(realKey, []byte("mac"))
+	if err != nil {
+		return nil, err
+	}
+
+	plaintext, err := authenticatedDecrypt(hybridEncrypted.Ciphertext, encKey[:16], macKey[:16])
 	if err != nil {
 		return nil, err
 	}
@@ -206,15 +215,42 @@ func (user *User) syncInbox(fileInfo *FileInfo) (err error) {
 		if err != nil {
 			continue
 		}
+
 		var request UpdateRequest
 		err = json.Unmarshal(requestByte, &request)
 		if err != nil {
 			continue
 		}
 
+		_, isSharerAuthorized := fileMetadata.AccessManifest[request.ParentUsername]
+		if !isSharerAuthorized {
+			continue
+		}
+
 		fileMetadata.AccessManifest[request.ChildUsername] = request.ChildAccessNodeUUID
 		fileMetadata.ShareTree[request.ParentUsername] =
 			append(fileMetadata.ShareTree[request.ParentUsername], request.ChildUsername)
+
+		childPBKey, ok := userlib.KeystoreGet(request.ChildUsername + "_PKE")
+		if !ok {
+			continue
+		}
+
+		childAccessNode, ok := userlib.DatastoreGet(request.ChildAccessNodeUUID)
+		if !ok {
+			continue
+		}
+
+		accessNodeBytes, err := hybridDecrypt(childAccessNode, user.decKey)
+		if err != nil {
+			continue
+		}
+
+		updatedChildAccessNode, err := hybridEncrypt(accessNodeBytes, childPBKey)
+		if err != nil {
+			return err
+		}
+		userlib.DatastoreSet(request.ChildAccessNodeUUID, updatedChildAccessNode)
 	}
 
 	metadataBytes, err := json.Marshal(fileMetadata)
@@ -240,12 +276,21 @@ func (user *User) syncInbox(fileInfo *FileInfo) (err error) {
 func hybridEncrypt(plaintext []byte, key userlib.PKEEncKey) ([]byte, error) {
 	sessionKey := userlib.RandomBytes(16)
 
+	encKey, err := userlib.HashKDF(sessionKey, []byte("enc"))
+	if err != nil {
+		return nil, err
+	}
+	macKey, err := userlib.HashKDF(sessionKey, []byte("mac"))
+	if err != nil {
+		return nil, err
+	}
+
 	wrappedSessionKey, err := userlib.PKEEnc(key, sessionKey)
 	if err != nil {
 		return nil, err
 	}
 
-	wrappedText, err := authenticatedEncrypt(plaintext, sessionKey, sessionKey)
+	wrappedText, err := authenticatedEncrypt(plaintext, encKey[:16], macKey[:16])
 	if err != nil {
 		return nil, err
 	}

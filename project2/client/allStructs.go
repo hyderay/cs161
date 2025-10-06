@@ -72,8 +72,8 @@ type Invitation struct {
 }
 
 type InvitationWrapper struct {
-	WrappedInvitation []byte
-	Signature         []byte
+	InvitationBytes []byte
+	Signature       []byte
 }
 
 type FileHeader struct {

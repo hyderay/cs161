@@ -52,7 +52,7 @@ var _ = Describe("Client Tests", func() {
 	var alice *client.User
 	var bob *client.User
 	var charles *client.User
-	// var doris *client.User
+	var doris *client.User
 	// var eve *client.User
 	// var frank *client.User
 	// var grace *client.User
@@ -70,7 +70,7 @@ var _ = Describe("Client Tests", func() {
 	aliceFile := "aliceFile.txt"
 	bobFile := "bobFile.txt"
 	charlesFile := "charlesFile.txt"
-	// dorisFile := "dorisFile.txt"
+	dorisFile := "dorisFile.txt"
 	// eveFile := "eveFile.txt"
 	// frankFile := "frankFile.txt"
 	// graceFile := "graceFile.txt"
@@ -87,7 +87,7 @@ var _ = Describe("Client Tests", func() {
 
 	Describe("Basic Tests", func() {
 
-		FSpecify("Basic Test: Testing InitUser/GetUser on a single user.", func() {
+		Specify("Basic Test: Testing InitUser/GetUser on a single user.", func() {
 			userlib.DebugMsg("Initializing user Alice.")
 			alice, err = client.InitUser("alice", defaultPassword)
 			Expect(err).To(BeNil())
@@ -98,7 +98,7 @@ var _ = Describe("Client Tests", func() {
 			//Expect(aliceLaptop).ToNot(BeNil())
 		})
 
-		FSpecify("Basic Test: Testing Single User Store/Load/Append.", func() {
+		Specify("Basic Test: Testing Single User Store/Load/Append.", func() {
 			userlib.DebugMsg("Initializing user Alice.")
 			alice, err = client.InitUser("alice", defaultPassword)
 			Expect(err).To(BeNil())
@@ -121,7 +121,7 @@ var _ = Describe("Client Tests", func() {
 			Expect(data).To(Equal([]byte(contentOne + contentTwo + contentThree)))
 		})
 
-		FSpecify("Test: Loading or appending to a non-existent file should fail.", func() {
+		Specify("Test: Loading or appending to a non-existent file should fail.", func() {
 			// Initialize the user
 			userlib.DebugMsg("Initializing user Alice.")
 			alice, err = client.InitUser("alice", defaultPassword)
@@ -138,7 +138,7 @@ var _ = Describe("Client Tests", func() {
 			Expect(err).ToNot(BeNil())
 		})
 
-		FSpecify("Basic Test: Testing Create/Accept Invite Functionality with multiple users and multiple instances.", func() {
+		Specify("Basic Test: Testing Create/Accept Invite Functionality with multiple users and multiple instances.", func() {
 			userlib.DebugMsg("Initializing users Alice (aliceDesktop) and Bob.")
 			aliceDesktop, err = client.InitUser("alice", defaultPassword)
 			Expect(err).To(BeNil())
@@ -195,7 +195,7 @@ var _ = Describe("Client Tests", func() {
 			Expect(data).To(Equal([]byte(contentOne + contentTwo + contentThree)))
 		})
 
-		FSpecify("Basic Test: Testing Revoke Functionality", func() {
+		Specify("Basic Test: Testing Revoke Functionality", func() {
 			userlib.DebugMsg("Initializing users Alice, Bob, and Charlie.")
 			alice, err = client.InitUser("alice", defaultPassword)
 			Expect(err).To(BeNil())
@@ -271,7 +271,7 @@ var _ = Describe("Client Tests", func() {
 
 	Describe("Security and Integrity Tests for User.go", func() {
 
-		FSpecify("Test: Tampering with a user's StoredUserData in Datastore should prevent login.", func() {
+		Specify("Test: Tampering with a user's StoredUserData in Datastore should prevent login.", func() {
 			userlib.DebugMsg("Initializing user Alice.")
 			_, err = client.InitUser("alice", defaultPassword)
 			Expect(err).To(BeNil())
@@ -291,7 +291,7 @@ var _ = Describe("Client Tests", func() {
 
 	Describe("File Operation Integrity Tests", func() {
 
-		FSpecify("Test: Tampering with the file index should be detected by LoadFile.", func() {
+		Specify("Test: Tampering with the file index should be detected by LoadFile.", func() {
 			userlib.DebugMsg("Initializing user Alice.")
 			alice, err = client.InitUser("alice", defaultPassword)
 			Expect(err).To(BeNil())
@@ -311,7 +311,7 @@ var _ = Describe("Client Tests", func() {
 			userlib.DebugMsg("SUCCESS: LoadFile failed as expected, detecting the tampering.")
 		})
 
-		FSpecify("Test: Tampering with a file chunk should be detected by LoadFile.", func() {
+		Specify("Test: Tampering with a file chunk should be detected by LoadFile.", func() {
 			userlib.DebugMsg("Initializing user Alice.")
 			alice, err = client.InitUser("alice", defaultPassword)
 			Expect(err).To(BeNil())
@@ -331,7 +331,7 @@ var _ = Describe("Client Tests", func() {
 			userlib.DebugMsg("SUCCESS: LoadFile failed as expected, detecting the tampering.")
 		})
 
-		FSpecify("Test: Tampering with a FileInfo metadata block should be detected.", func() {
+		Specify("Test: Tampering with a FileInfo metadata block should be detected.", func() {
 			userlib.DebugMsg("Initializing user Alice.")
 			alice, err = client.InitUser("alice", defaultPassword)
 			Expect(err).To(BeNil())
@@ -351,7 +351,7 @@ var _ = Describe("Client Tests", func() {
 			userlib.DebugMsg("SUCCESS: LoadFile failed as expected, detecting the tampering.")
 		})
 
-		FSpecify("Test: Tampering with an AccessNode should be detected by LoadFile.", func() {
+		Specify("Test: Tampering with an AccessNode should be detected by LoadFile.", func() {
 			userlib.DebugMsg("Initializing user Alice.")
 			alice, err = client.InitUser("alice", defaultPassword)
 			Expect(err).To(BeNil())
@@ -370,7 +370,7 @@ var _ = Describe("Client Tests", func() {
 			userlib.DebugMsg("SUCCESS: LoadFile failed as expected, detecting the tampering.")
 		})
 
-		FSpecify("Test: A corrupted entry in the Inbox should be ignored.", func() {
+		Specify("Test: A corrupted entry in the Inbox should be ignored.", func() {
 			// Setup: Alice creates a file.
 			alice, err := client.InitUser("alice", defaultPassword)
 			Expect(err).To(BeNil())
@@ -387,7 +387,7 @@ var _ = Describe("Client Tests", func() {
 			Expect(err).To(BeNil())
 		})
 
-		FSpecify("Test: Tampering with the FileHeader should be detected.", func() {
+		Specify("Test: Tampering with the FileHeader should be detected.", func() {
 			alice, err := client.InitUser("alice", defaultPassword)
 			Expect(err).To(BeNil())
 			err = alice.StoreFile(aliceFile, []byte(contentOne))
@@ -430,7 +430,7 @@ var _ = Describe("Client Tests", func() {
 			Expect(err).ToNot(BeNil())
 		})
 
-		FSpecify("Test: Revoked user cannot regain access via inbox stuffing.", func() {
+		Specify("Test: Revoked user cannot regain access via inbox stuffing.", func() {
 			// Attack: The revoked user (Bob) crafts a malicious share request and
 			// stuffs it into Alice's inbox.
 			userlib.DebugMsg("Adversary (Bob) attempting to stuff Alice's inbox.")
@@ -450,7 +450,7 @@ var _ = Describe("Client Tests", func() {
 			Expect(err).ToNot(BeNil())
 		})
 
-		FSpecify("Test: Revoked user cannot decrypt future file content.", func() {
+		Specify("Test: Revoked user cannot decrypt future file content.", func() {
 			// A benign user (Alice) appends new content to the file after revocation.
 			userlib.DebugMsg("Alice appending new data after revoking Bob.")
 			err = alice.AppendToFile(aliceFile, []byte(contentTwo))
@@ -461,6 +461,143 @@ var _ = Describe("Client Tests", func() {
 			userlib.DebugMsg("Adversary (Bob) attempting to read new content.")
 			err = client.RevokedUserReadsFutureContent("bob", defaultPassword, bobFile)
 			Expect(err).To(BeNil())
+		})
+	})
+
+	Describe("Synchronization and State Consistency Tests", func() {
+
+		FSpecify("Test: Transitive sharing is consistent after owner syncs through multiple levels.", func() {
+			userlib.DebugMsg("Initializing Alice, Bob, Charles, and Doris.")
+			alice, err = client.InitUser("alice", defaultPassword)
+			Expect(err).To(BeNil())
+			bob, err = client.InitUser("bob", defaultPassword)
+			Expect(err).To(BeNil())
+			charles, err = client.InitUser("charles", defaultPassword)
+			Expect(err).To(BeNil())
+			doris, err = client.InitUser("doris", defaultPassword)
+			Expect(err).To(BeNil())
+
+			userlib.DebugMsg("Alice storing file.")
+			err = alice.StoreFile(aliceFile, []byte(contentOne))
+			Expect(err).To(BeNil())
+
+			userlib.DebugMsg("Alice shares with Bob.")
+			invite, err := alice.CreateInvitation(aliceFile, "bob")
+			Expect(err).To(BeNil())
+			err = bob.AcceptInvitation("alice", invite, bobFile)
+			Expect(err).To(BeNil())
+
+			userlib.DebugMsg("Bob shares with Charles. This sends a request to Alice's inbox.")
+			invite, err = bob.CreateInvitation(bobFile, "charles")
+			Expect(err).To(BeNil())
+			err = charles.AcceptInvitation("bob", invite, charlesFile)
+			Expect(err).To(BeNil())
+
+			userlib.DebugMsg("Alice appends to the file, triggering a sync for Charles.")
+			err = alice.AppendToFile(aliceFile, []byte(contentTwo))
+			Expect(err).To(BeNil())
+
+			userlib.DebugMsg("After Alice's first sync, Charles shares with Doris.")
+			invite, err = charles.CreateInvitation(charlesFile, "doris")
+			Expect(err).To(BeNil())
+			err = doris.AcceptInvitation("charles", invite, dorisFile)
+			Expect(err).To(BeNil())
+
+			userlib.DebugMsg("Before Alice's second sync, Doris should NOT have access.")
+			_, err = doris.LoadFile(dorisFile)
+			Expect(err).ToNot(BeNil())
+
+			userlib.DebugMsg("Alice appends again, triggering a second sync for Doris.")
+			err = alice.AppendToFile(aliceFile, []byte(contentThree))
+			Expect(err).To(BeNil())
+
+			userlib.DebugMsg("After Alice's second sync, Doris SHOULD have access.")
+			data, err := doris.LoadFile(dorisFile)
+			Expect(err).To(BeNil())
+			Expect(data).To(Equal([]byte(contentOne + contentTwo + contentThree)))
+		})
+
+		FSpecify("Test: Revocation correctly cascades down a multi-level share tree.", func() {
+			userlib.DebugMsg("Initializing Alice, Bob, Charles, and Doris.")
+			alice, err = client.InitUser("alice", defaultPassword)
+			Expect(err).To(BeNil())
+			bob, err = client.InitUser("bob", defaultPassword)
+			Expect(err).To(BeNil())
+			charles, err = client.InitUser("charles", defaultPassword)
+			Expect(err).To(BeNil())
+			doris, err = client.InitUser("doris", defaultPassword)
+			Expect(err).To(BeNil())
+
+			userlib.DebugMsg("Alice creates file and establishes A->B->C share chain.")
+			err = alice.StoreFile(aliceFile, []byte(contentOne))
+			Expect(err).To(BeNil())
+			invite, err := alice.CreateInvitation(aliceFile, "bob")
+			Expect(err).To(BeNil())
+			err = bob.AcceptInvitation("alice", invite, bobFile)
+			Expect(err).To(BeNil())
+			invite, err = bob.CreateInvitation(bobFile, "charles")
+			Expect(err).To(BeNil())
+			err = charles.AcceptInvitation("bob", invite, charlesFile)
+			Expect(err).To(BeNil())
+
+			userlib.DebugMsg("Alice syncs to approve Charles's access.")
+			err = alice.AppendToFile(aliceFile, []byte(contentTwo))
+			Expect(err).To(BeNil())
+
+			userlib.DebugMsg("Charles sends a share request for Doris to Alice's inbox.")
+			invite, err = charles.CreateInvitation(charlesFile, "doris")
+			Expect(err).To(BeNil())
+			// Note: Doris does NOT accept yet. The request is just in the inbox.
+
+			userlib.DebugMsg("Alice revokes BOB. This should sync, see C invited D, then revoke B, C, and D.")
+			err = alice.RevokeAccess(aliceFile, "bob")
+			Expect(err).To(BeNil())
+
+			userlib.DebugMsg("Verifying Bob has lost access.")
+			_, err = bob.LoadFile(bobFile)
+			Expect(err).ToNot(BeNil())
+
+			userlib.DebugMsg("Verifying Charles has lost access.")
+			_, err = charles.LoadFile(charlesFile)
+			Expect(err).ToNot(BeNil())
+
+			userlib.DebugMsg("Doris accepts the now-stale invitation (this should succeed).")
+			err = doris.AcceptInvitation("charles", invite, dorisFile)
+			Expect(err).To(BeNil())
+
+			userlib.DebugMsg("Verifying Doris cannot access the file with the stale invitation.")
+			_, err = doris.LoadFile(dorisFile)
+			Expect(err).ToNot(BeNil())
+		})
+
+		FSpecify("Test: State is consistent across multiple sessions for the same user.", func() {
+			userlib.DebugMsg("Initializing Alice (laptop session) and Bob.")
+			aliceLaptop, err = client.InitUser("alice", defaultPassword)
+			Expect(err).To(BeNil())
+			bob, err = client.InitUser("bob", defaultPassword)
+			Expect(err).To(BeNil())
+
+			userlib.DebugMsg("Alice's laptop session creates and stores a file.")
+			err = aliceLaptop.StoreFile(aliceFile, []byte(contentOne))
+			Expect(err).To(BeNil())
+
+			userlib.DebugMsg("Alice's laptop shares the file with Bob.")
+			invite, err := aliceLaptop.CreateInvitation(aliceFile, "bob")
+			Expect(err).To(BeNil())
+			err = bob.AcceptInvitation("alice", invite, bobFile)
+			Expect(err).To(BeNil())
+
+			userlib.DebugMsg("Logging in on a new device for Alice (desktop session).")
+			aliceDesktop, err = client.GetUser("alice", defaultPassword)
+			Expect(err).To(BeNil())
+
+			userlib.DebugMsg("Alice's desktop session revokes Bob. This must sync the share action taken by the laptop.")
+			err = aliceDesktop.RevokeAccess(aliceFile, "bob")
+			Expect(err).To(BeNil())
+
+			userlib.DebugMsg("Verifying Bob has lost access.")
+			_, err = bob.LoadFile(bobFile)
+			Expect(err).ToNot(BeNil())
 		})
 	})
 })
